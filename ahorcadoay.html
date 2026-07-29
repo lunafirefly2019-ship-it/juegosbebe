@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ahorcado: ¡Ay, cuánto me quiero!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif; 
+            background-color: #fdf2f8; 
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="text-gray-900 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white rounded-3xl shadow-xl p-6 w-full max-w-md border-4 border-pink-400 flex flex-col items-center text-center">
+        <!-- Encabezado del Nivel -->
+        <div class="mb-4">
+            <span id="level-indicator" class="bg-pink-100 text-pink-600 font-bold px-4 py-1 rounded-full text-sm border-2 border-pink-300">Nivel 1 de 5</span>
+            <h1 class="text-2xl font-bold text-pink-600 mt-2">Ahorcado Mágico</h1>
+            <p id="hint-text" class="text-sm text-gray-600 mt-1 italic font-medium px-2">Pista...</p>
+        </div>
+
+        <!-- Vidas / Corazones -->
+        <div class="flex gap-2 mb-4 text-2xl" id="hearts-container">
+            ❤️❤️❤️❤️❤️❤️
+        </div>
+
+        <!-- Palabra Oculta -->
+        <div id="word-container" class="flex gap-2 flex-wrap justify-center mb-6 min-h-[50px] items-center">
+            <!-- Las letras se generan dinámicamente -->
+        </div>
+
+        <!-- Mensaje de Estado / Feedback -->
+        <div id="message-container" class="h-8 mb-4 font-bold text-lg text-pink-600"></div>
+
+        <!-- Teclado en Pantalla -->
+        <div id="keyboard" class="grid grid-cols-7 gap-1.5 w-full max-w-sm mb-4">
+            <!-- Botones de la A a la Z generados por JS -->
+        </div>
+
+        <!-- Botón Siguiente Nivel / Reiniciar (Oculto hasta ganar/perder) -->
+        <button id="next-btn" onclick="nextLevel()" class="hidden bg-blue-500 hover:bg-blue-600 text-white font-bold px-6 py-2 rounded-full shadow-md transition transform hover:scale-105">
+            Siguiente Nivel ➡️
+        </button>
+    </div>
+
+    <script>
+        // Niveles con palabras clave del cuento (reemplazando a Copetín por HÉROE)
+        const levels = [
+            { word: "EGOCÉNTRICO", hint: "Así se describe el protagonista al inicio, muy enamorado de sí mismo." },
+            { word: "HÉROE", hint: "Cómo se considera el protagonista en su propia vida y centro de atención." },
+            { word: "ESPEJO", hint: "El objeto donde el protagonista podría mirarse y admirarse todo el tiempo." },
+            { word: "MONSTRUOS", hint: "Lo que asustaba por las noches a la niña que vivía en la casa de al lado." },
+            { word: "AMISTAD", hint: "Lo valioso que descubren los niños al final en lugar de estar solos." }
+        ];
+
+        let currentLevel = 0;
+        let selectedWord = "";
+        let guessedLetters = [];
+        let mistakes = 0;
+        const maxMistakes = 6;
+        let isGameOver = false;
+
+        const levelIndicator = document.getElementById('level-indicator');
+        const hintText = document.getElementById('hint-text');
+        const wordContainer = document.getElementById('word-container');
+        const heartsContainer = document.getElementById('hearts-container');
+        const messageContainer = document.getElementById('message-container');
+        const keyboard = document.getElementById('keyboard');
+        const nextBtn = document.getElementById('next-btn');
+
+        function initGame() {
+            currentLevel = 0;
+            loadLevel();
+        }
+
+        function loadLevel() {
+            isGameOver = false;
+            mistakes = 0;
+            guessedLetters = [];
+            selectedWord = levels[currentLevel].word;
+            
+            levelIndicator.textContent = `Nivel ${currentLevel + 1} de ${levels.length}`;
+            hintText.textContent = `💡 Pista: ${levels[currentLevel].hint}`;
+            messageContainer.textContent = "";
+            nextBtn.classList.add('hidden');
+
+            renderWord();
+            renderHearts();
+            renderKeyboard();
+        }
+
+        function renderWord() {
+            wordContainer.innerHTML = "";
+            for (let letter of selectedWord) {
+                const span = document.createElement('span');
+                span.className = "w-9 h-12 flex items-center justify-center text-2xl font-bold border-b-4 border-pink-500 text-gray-800 bg-pink-50 rounded-t-md";
+                span.textContent = guessedLetters.includes(letter) ? letter : "_";
+                wordContainer.appendChild(span);
+            }
+        }
+
+        function renderHearts() {
+            const remaining = maxMistakes - mistakes;
+            heartsContainer.textContent = "❤️".repeat(remaining) + "🖤".repeat(mistakes);
+        }
+
+        function renderKeyboard() {
+            keyboard.innerHTML = "";
+            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+            
+            for (let char of letters) {
+                const btn = document.createElement('button');
+                btn.textContent = char;
+                btn.className = "bg-pink-100 hover:bg-pink-200 text-pink-800 font-bold p-2 rounded-lg text-sm shadow-sm transition border-2 border-pink-200 active:scale-95";
+                
+                if (guessedLetters.includes(char)) {
+                    btn.disabled = true;
+                    btn.className = "bg-gray-200 text-gray-400 font-bold p-2 rounded-lg text-sm border-2 border-gray-300 cursor-not-allowed";
+                }
+                
+                btn.onclick = () => handleGuess(char, btn);
+                keyboard.appendChild(btn);
+            }
+        }
+
+        function handleGuess(letter, btn) {
+            if (isGameOver) return;
+
+            guessedLetters.push(letter);
+            
+            if (selectedWord.includes(letter)) {
+                btn.className = "bg-blue-100 text-blue-800 font-bold p-2 rounded-lg text-sm border-2 border-blue-400";
+            } else {
+                btn.className = "bg-red-100 text-red-800 font-bold p-2 rounded-lg text-sm border-2 border-red-400";
+                mistakes++;
+                renderHearts();
+            }
+
+            renderWord();
+            checkGameStatus();
+        }
+
+        function checkGameStatus() {
+            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(letter));
+
+            if (hasWon) {
+                isGameOver = true;
+                messageContainer.textContent = "¡Genial! Nivel superado 🎉";
+                messageContainer.className = "h-8 mb-4 font-bold text-lg text-blue-600";
+                disableAllButtons();
+
+                if (currentLevel < levels.length - 1) {
+                    nextBtn.textContent = "Siguiente Nivel ➡️";
+                    nextBtn.classList.remove('hidden');
+                } else {
+                    // ¡JUEGO COMPLETADO EXITOSAMENTE!
+                    messageContainer.textContent = "¡Completaste todos los niveles! 🌟";
+                    nextBtn.textContent = "¡Terminar Reto! ✨";
+                    nextBtn.classList.remove('hidden');
+                    
+                    // Notificar a la página principal que el minijuego fue superado
+                    window.parent.postMessage("JUEGO_SUPERADO", "*");
+                }
+            } else if (mistakes >= maxMistakes) {
+                isGameOver = true;
+                messageContainer.textContent = `¡Oh no! La palabra era: ${selectedWord}`;
+                messageContainer.className = "h-8 mb-4 font-bold text-lg text-red-500";
+                disableAllButtons();
+                
+                nextBtn.textContent = "🔄 Reintentar Nivel";
+                nextBtn.classList.remove('hidden');
+            }
+        }
+
+        function disableAllButtons() {
+            const buttons = keyboard.querySelectorAll('button');
+            buttons.forEach(b => b.disabled = true);
+        }
+
+        function nextLevel() {
+            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(letter));
+            
+            if (hasWon) {
+                if (currentLevel < levels.length - 1) {
+                    currentLevel++;
+                    loadLevel();
+                } else {
+                    // Acción final si ya dio clic en terminar
+                    window.parent.postMessage("JUEGO_SUPERADO", "*");
+                }
+            } else {
+                // Si perdió, reintenta el mismo nivel
+                loadLevel();
+            }
+        }
+
+        // Iniciar al cargar
+        initGame();
+    </script>
+</body>
+</html>
