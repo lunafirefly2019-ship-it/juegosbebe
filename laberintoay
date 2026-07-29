@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Laberinto de Copetín</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif; 
+            background-color: #fdf2f8; 
+            user-select: none;
+            touch-action: manipulation;
+        }
+        
+        #maze-container {
+            display: grid;
+            gap: 2px;
+            background-color: #1f2937; 
+            padding: 4px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            border: 4px solid #db2777; 
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .cell {
+            background-color: #fce7f3; 
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .cell.wall {
+            background-color: #111827; 
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.8);
+        }
+
+        #player {
+            position: absolute;
+            background-image: url('https://drive.google.com/thumbnail?id=1r7ylQdNE37GhQYPQd_APl7e05QDhjzcK&sz=w200');
+            background-size: contain; 
+            background-position: center;
+            background-repeat: no-repeat;
+            background-color: transparent; 
+            transition: all 0.15s ease-out;
+            z-index: 10;
+        }
+        
+        .dpad-btn {
+            background-color: #3b82f6; 
+            color: white;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 0 #1d4ed8;
+            transition: transform 0.1s, box-shadow 0.1s;
+            height: 55px;
+        }
+        .dpad-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #1d4ed8;
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -20px) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="text-gray-900 flex flex-col items-center justify-center min-h-screen p-2 md:p-4">
+
+    <div class="bg-white rounded-3xl shadow-xl p-3 md:p-6 w-full max-w-md border-4 border-pink-400 flex flex-col items-center text-center relative overflow-hidden">
+        
+        <!-- Pantalla de Victoria -->
+        <div id="victory-screen" class="hidden absolute inset-0 bg-white z-50 flex-col items-center justify-center p-6 text-center">
+            <div class="text-6xl mb-4 animate-bounce">🏆🌟</div>
+            <h2 class="text-3xl font-bold text-pink-600 mb-4">¡Impresionante!</h2>
+            <p class="text-lg text-gray-700 font-bold mb-6">Superaste los laberintos más difíciles y esquivaste a los monstruos.</p>
+            <button onclick="finishGame()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-8 py-4 rounded-full shadow-lg text-xl animate-pulse w-full">
+                Finalizar Aventura ✨
+            </button>
+        </div>
+
+        <!-- Globito de Frase o Alerta de Monstruo -->
+        <div id="quote-modal" class="hidden absolute top-12 left-1/2 w-11/12 max-w-[280px] bg-white border-4 border-blue-400 rounded-2xl shadow-2xl p-4 z-40 text-center">
+            <p id="quote-text" class="text-sm md:text-base font-bold text-blue-600 italic"></p>
+        </div>
+
+        <!-- Encabezado -->
+        <div class="mb-3 w-full">
+            <span id="level-indicator" class="bg-blue-100 text-blue-700 font-bold px-4 py-1 rounded-full text-xs md:text-sm border-2 border-blue-300">Nivel 1</span>
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 mt-2">¡Cuidado con los Monstruos!</h1>
+        </div>
+
+        <!-- Contenedor del Laberinto -->
+        <div id="maze-container" class="mb-4">
+            <div id="player"></div>
+        </div>
+
+        <!-- Controles en Pantalla -->
+        <div class="grid grid-cols-3 gap-2 w-full max-w-[180px] mx-auto mb-2">
+            <div></div>
+            <button onpointerdown="move(0, -1)" class="dpad-btn" aria-label="Arriba">⬆️</button>
+            <div></div>
+            <button onpointerdown="move(-1, 0)" class="dpad-btn" aria-label="Izquierda">⬅️</button>
+            <button onpointerdown="move(0, 1)" class="dpad-btn" aria-label="Abajo">⬇️</button>
+            <button onpointerdown="move(1, 0)" class="dpad-btn" aria-label="Derecha">➡️</button>
+        </div>
+    </div>
+
+    <script>
+        // Frases inspiradoras del libro
+        const phrases = [
+            "«A veces, por mirarme tanto a mí mismo, no veo el camino correcto.»",
+            "«Para encontrar la salida, hay que tener paciencia y valentía.»",
+            "«¡Ay, cuánto me quiero! Pero... por aquí hay un callejón sin salida.»",
+            "«Los monstruos de la noche intentan asustarme, ¡pero un héroe sigue adelante!»",
+            "«Hasta los héroes como yo a veces tienen que retroceder.»"
+        ];
+
+        /* Leyenda de códigos de celdas:
+           0 = Camino libre
+           1 = Pared
+           2 = Callejón sin salida (activa frase del libro)
+           3 = Trampa de Monstruo (Aparece y desaparece. Si te toca o lo tocas, vas al inicio)
+        */
+        const levels = [
+            { // Nivel 1: 11x11 Avanzado con Monstruos
+                cols: 11, rows: 11,
+                grid: [
+                    0, 1, 3, 1, 0, 0, 0, 1, 2, 1, 3,
+                    0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+                    0, 0, 0, 1, 3, 1, 0, 0, 0, 1, 0,
+                    1, 1, 0, 1, 0, 1, 1, 1, 3, 1, 0,
+                    2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
+                    1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 3,
+                    0, 0, 3, 0, 0, 1, 2, 1, 0, 0, 0,
+                    0, 1, 0, 1, 0, 1, 0, 1, 3, 1, 0,
+                    0, 1, 2, 1, 3, 0, 0, 1, 0, 1, 2,
+                    0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0,
+                    1, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0
+                ]
+            },
+            { // Nivel 2: 13x13 Muy enredado y con más monstruos
+                cols: 13, rows: 13,
+                grid: [
+                    0, 1, 3, 1, 0, 0, 0, 0, 0, 1, 2, 1, 3,
+                    0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0,
+                    0, 0, 0, 0, 0, 1, 3, 1, 0, 0, 0, 1, 2,
+                    1, 1, 3, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0,
+                    0, 0, 0, 0, 0, 3, 0, 0, 0, 1, 0, 1, 0,
+                    0, 1, 1, 1, 1, 1, 1, 1, 0, 3, 0, 0, 0,
+                    2, 1, 3, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0,
+                    0, 1, 0, 1, 1, 1, 0, 1, 2, 0, 0, 1, 0,
+                    0, 0, 3, 0, 2, 1, 0, 1, 0, 1, 0, 1, 3,
+                    0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0,
+                    0, 1, 3, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0,
+                    0, 1, 0, 1, 1, 1, 3, 1, 0, 0, 0, 0, 0,
+                    2, 0, 0, 0, 0, 0, 0, 1, 2, 1, 0, 1, 0
+                ]
+            },
+            { // Nivel 3: 13x13 El laberinto definitivo del terror y los espejos
+                cols: 13, rows: 13,
+                grid: [
+                    0, 3, 0, 1, 2, 1, 3, 0, 0, 1, 0, 1, 0,
+                    1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 3, 1, 0,
+                    0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 2,
+                    2, 0, 0, 0, 3, 1, 0, 0, 0, 3, 0, 0, 0,
+                    1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1,
+                    0, 0, 0, 1, 0, 0, 3, 0, 0, 1, 0, 0, 3,
+                    0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0,
+                    3, 1, 0, 0, 0, 1, 2, 1, 0, 0, 3, 1, 0,
+                    0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0,
+                    0, 0, 3, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0,
+                    1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0
+                ]
+            }
+        ];
+
+        let currentLevelIndex = 0;
+        let currentMap = {};
+        let playerPos = { x: 0, y: 0 };
+        let isMoving = false;
+        let quoteTimeout = null;
+        let monsterActive = false; // Estado de parpadeo de los monstruos
+        let monsterInterval = null;
+
+        const mazeContainer = document.getElementById('maze-container');
+        const playerElement = document.getElementById('player');
+        const levelIndicator = document.getElementById('level-indicator');
+        const victoryScreen = document.getElementById('victory-screen');
+        const quoteModal = document.getElementById('quote-modal');
+        const quoteText = document.getElementById('quote-text');
+
+        function initLevel() {
+            currentMap = JSON.parse(JSON.stringify(levels[currentLevelIndex]));
+            playerPos = { x: 0, y: 0 };
+            
+            levelIndicator.textContent = `Nivel ${currentLevelIndex + 1} de ${levels.length}`;
+            
+            mazeContainer.style.gridTemplateColumns = `repeat(${currentMap.cols}, 1fr)`;
+            mazeContainer.style.gridTemplateRows = `repeat(${currentMap.rows}, 1fr)`;
+            
+            const maxContainerWidth = Math.min(window.innerWidth - 60, 330); 
+            const cellSize = Math.floor(maxContainerWidth / currentMap.cols);
+            
+            mazeContainer.style.width = `${currentMap.cols * cellSize + 8}px`;
+            mazeContainer.style.height = `${currentMap.rows * cellSize + 8}px`;
+
+            playerElement.style.width = `${cellSize}px`;
+            playerElement.style.height = `${cellSize}px`;
+            
+            renderMaze();
+            updatePlayerPosition(cellSize);
+            startMonsterTimer();
+        }
+
+        function startMonsterTimer() {
+            if (monsterInterval) clearInterval(monsterInterval);
+            // Cada 2 segundos los monstruos aparecen y desaparecen
+            monsterInterval = setInterval(() => {
+                monsterActive = !monsterActive;
+                renderMaze();
+
+                // Si los monstruos se activan y Copetín está parado justo encima de uno, ¡regresa al inicio!
+                const index = playerPos.y * currentMap.cols + playerPos.x;
+                if (currentMap.grid[index] === 3 && monsterActive) {
+                    triggerMonsterHit();
+                }
+            }, 2000);
+        }
+
+        function renderMaze() {
+            const oldCells = mazeContainer.querySelectorAll('.cell');
+            oldCells.forEach(cell => cell.remove());
+
+            for (let i = 0; i < currentMap.grid.length; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                
+                if (currentMap.grid[i] === 1) {
+                    cell.classList.add('wall');
+                } else if (currentMap.grid[i] === 3) {
+                    // Si el monstruo está activo, se muestra la carita temible 👹
+                    if (monsterActive) {
+                        cell.textContent = "👹";
+                    }
+                }
+
+                // La meta final
+                if (i === currentMap.grid.length - 1) {
+                    cell.textContent = "🌟"; 
+                }
+
+                mazeContainer.appendChild(cell);
+            }
+            mazeContainer.appendChild(playerElement);
+        }
+
+        function updatePlayerPosition(cellSize) {
+            const posX = playerPos.x * cellSize + 4;
+            const posY = playerPos.y * cellSize + 4;
+            playerElement.style.transform = `translate(${posX}px, ${posY}px) scale(0.85)`;
+        }
+
+        function showModalMessage(text, isMonster = false) {
+            quoteText.textContent = text;
+            quoteText.className = isMonster ? "text-sm md:text-base font-bold text-red-600 italic" : "text-sm md:text-base font-bold text-blue-600 italic";
+            quoteModal.classList.remove('hidden');
+            quoteModal.classList.add('animate-pop');
+
+            if(quoteTimeout) clearTimeout(quoteTimeout);
+            
+            quoteTimeout = setTimeout(() => {
+                quoteModal.classList.add('hidden');
+                quoteModal.classList.remove('animate-pop');
+            }, 3000);
+        }
+
+        function triggerMonsterHit() {
+            showModalMessage("¡Un monstruo nocturno asustó a Copetín! Volviste al inicio 😱", true);
+            playerPos = { x: 0, y: 0 };
+            const cellSize = (mazeContainer.offsetWidth - 8) / currentMap.cols;
+            updatePlayerPosition(cellSize);
+        }
+
+        function move(dx, dy) {
+            if (isMoving) return;
+            
+            const newX = playerPos.x + dx;
+            const newY = playerPos.y + dy;
+
+            if (newX < 0 || newX >= currentMap.cols || newY < 0 || newY >= currentMap.rows) return;
+
+            const index = newY * currentMap.cols + newX;
+            
+            // Chocar contra pared (1)
+            if (currentMap.grid[index] === 1) {
+                const cellSize = (mazeContainer.offsetWidth - 8) / currentMap.cols;
+                updatePlayerPosition(cellSize);
+                return; 
+            }
+
+            // Si intenta pisar una trampa de monstruo activa (3)
+            if (currentMap.grid[index] === 3 && monsterActive) {
+                triggerMonsterHit();
+                return;
+            }
+
+            // Mover personaje
+            playerPos.x = newX;
+            playerPos.y = newY;
+            const cellSize = (mazeContainer.offsetWidth - 8) / currentMap.cols;
+            updatePlayerPosition(cellSize);
+
+            // Si cae en un callejón sin salida con frase (2)
+            if (currentMap.grid[index] === 2) {
+                const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+                showModalMessage(randomPhrase, false);
+                currentMap.grid[index] = 0; // Se limpia para no repetir
+            }
+
+            // Si pisa un monstruo que justo se activó al llegar
+            if (currentMap.grid[index] === 3 && monsterActive) {
+                triggerMonsterHit();
+                return;
+            }
+
+            // Verificar si llegó a la meta (estrella final)
+            if (playerPos.x === currentMap.cols - 1 && playerPos.y === currentMap.rows - 1) {
+                isMoving = true; 
+                if (monsterInterval) clearInterval(monsterInterval);
+                setTimeout(() => {
+                    if (currentLevelIndex < levels.length - 1) {
+                        currentLevelIndex++;
+                        initLevel();
+                        isMoving = false;
+                    } else {
+                        victoryScreen.classList.remove('hidden');
+                        victoryScreen.classList.add('flex');
+                    }
+                }, 400); 
+            }
+        }
+
+        function finishGame() {
+            window.parent.postMessage("JUEGO_SUPERADO", "*");
+        }
+
+        window.addEventListener("keydown", function(e) {
+            if (victoryScreen.classList.contains('flex')) return;
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+                e.preventDefault();
+            }
+            switch(e.key) {
+                case "ArrowUp": move(0, -1); break;
+                case "ArrowDown": move(0, 1); break;
+                case "ArrowLeft": move(-1, 0); break;
+                case "ArrowRight": move(1, 0); break;
+            }
+        });
+
+        window.addEventListener("resize", () => {
+            if(!victoryScreen.classList.contains('flex')) initLevel();
+        });
+
+        initLevel();
+    </script>
+</body>
+</html>
