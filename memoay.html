@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Memorice: ¡Ay, cuánto me quiero!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif; 
+            background-color: #fdf2f8; 
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+    </style>
+</head>
+<body class="text-gray-900 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white rounded-3xl shadow-xl p-4 md:p-6 w-full max-w-lg border-4 border-pink-400 flex flex-col items-center text-center relative overflow-hidden">
+        
+        <!-- Pantalla de Victoria -->
+        <div id="victory-screen" class="hidden absolute inset-0 bg-white z-50 flex-col items-center justify-center p-6 text-center">
+            <div class="text-6xl mb-4 animate-bounce">🏆🌟</div>
+            <h2 class="text-3xl font-bold text-pink-600 mb-4">¡Excelente Memoria!</h2>
+            <p class="text-lg text-gray-700 font-bold mb-6">Has completado todas las frases del cuento ¡Ay, cuánto me quiero!</p>
+            <button onclick="finishGame()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-8 py-4 rounded-full shadow-lg text-xl animate-pulse w-full">
+                Avanzar en la Historia ✨
+            </button>
+        </div>
+
+        <!-- Encabezado -->
+        <div class="mb-4 w-full">
+            <span class="bg-blue-100 text-blue-700 font-bold px-4 py-1 rounded-full text-sm border-2 border-blue-300">Minijuego 3: Memorice Literario</span>
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 mt-2">Une las dos mitades de cada frase</h1>
+        </div>
+
+        <!-- Tablero de Tarjetas (10 tarjetas / 5 parejas) -->
+        <div id="grid-container" class="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full mb-4">
+            <!-- Tarjetas inyectadas por JS -->
+        </div>
+
+        <!-- Progreso -->
+        <div class="text-sm font-bold text-gray-600" id="score-text">
+            Frases completas: 0 / 5
+        </div>
+    </div>
+
+    <script>
+        // Las 5 frases célebres del cuento original de Mauricio Paredes divididas en dos mitades
+        const cardData = [
+            // Frase 1
+            { id: 1, text: "«¡Ay, cuánto me quiero!..." },
+            { id: 1, text: "...decía el niño al espejo.»" },
+            
+            // Frase 2
+            { id: 2, text: "«Los monstruos de la noche..." },
+            { id: 2, text: "...no me dan ningún miedo.»" },
+            
+            // Frase 3
+            { id: 3, text: "«Para qué quiero amigos..." },
+            { id: 3, text: "...si ya me tengo a mí mismo.»" },
+            
+            // Frase 4
+            { id: 4, text: "«La niña de al lado..." },
+            { id: 4, text: "...me enseñó a mirar más allá.»" },
+            
+            // Frase 5
+            { id: 5, text: "«Descubrir que compartir..." },
+            { id: 5, text: "...es mucho mejor que estar solo.»" }
+        ];
+
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let isLocked = false;
+
+        const gridContainer = document.getElementById('grid-container');
+        const scoreText = document.getElementById('score-text');
+        const victoryScreen = document.getElementById('victory-screen');
+
+        // URL trasera forzada desde Google Drive
+        const cardBackUrl = 'https://drive.google.com/thumbnail?id=1RyJd4MmVYrZMlQoVGHLSHs9dXj00MXDC&sz=w400';
+
+        function initGame() {
+            matchedPairs = 0;
+            flippedCards = [];
+            isLocked = false;
+            scoreText.textContent = `Frases completas: 0 / 5`;
+            victoryScreen.classList.add('hidden');
+            victoryScreen.classList.remove('flex');
+
+            // Mezclar tarjetas de forma aleatoria
+            cards = [...cardData]
+                .sort(() => Math.random() - 0.5)
+                .map((item, index) => ({ ...item, uniqueId: index, isFlipped: false, isMatched: false }));
+
+            renderBoard();
+        }
+
+        function renderBoard() {
+            gridContainer.innerHTML = "";
+            cards.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.className = "perspective-1000 h-28 sm:h-32 cursor-pointer";
+                
+                cardElement.innerHTML = `
+                    <div class="relative w-full h-full duration-300 transform-style-3d ${card.isFlipped || card.isMatched ? 'rotate-y-180' : ''}" data-index="${index}">
+                        <!-- Cara trasera (Imagen de Google Drive) -->
+                        <div class="absolute inset-0 w-full h-full bg-pink-100 border-2 border-pink-300 rounded-xl flex items-center justify-center backface-hidden shadow-md overflow-hidden">
+                            <img src="${cardBackUrl}" alt="Tarjeta" class="w-full h-full object-cover">
+                        </div>
+                        <!-- Cara delantera (Mitad de frase) -->
+                        <div class="absolute inset-0 w-full h-full bg-blue-50 border-2 border-blue-400 rounded-xl flex items-center justify-center backface-hidden rotate-y-180 shadow-md p-2 text-xs sm:text-sm font-bold text-blue-900 text-center">
+                            ${card.text}
+                        </div>
+                    </div>
+                `;
+
+                cardElement.addEventListener('click', () => handleCardClick(index));
+                gridContainer.appendChild(cardElement);
+            });
+        }
+
+        function handleCardClick(index) {
+            if (isLocked) return;
+            const clickedCard = cards[index];
+
+            if (clickedCard.isFlipped || clickedCard.isMatched) return;
+
+            clickedCard.isFlipped = true;
+            flippedCards.push({ index, id: clickedCard.id });
+            renderBoard();
+
+            if (flippedCards.length === 2) {
+                checkForMatch();
+            }
+        }
+
+        function checkForMatch() {
+            isLocked = true;
+            const [first, second] = flippedCards;
+
+            if (first.id === second.id) {
+                cards[first.index].isMatched = true;
+                cards[second.index].isMatched = true;
+                matchedPairs++;
+                scoreText.textContent = `Frases completas: ${matchedPairs} / 5`;
+                
+                resetTurn();
+
+                if (matchedPairs === 5) {
+                    setTimeout(() => {
+                        victoryScreen.classList.remove('hidden');
+                        victoryScreen.classList.add('flex');
+                    }, 500);
+                }
+            } else {
+                setTimeout(() => {
+                    cards[first.index].isFlipped = false;
+                    cards[second.index].isFlipped = false;
+                    resetTurn();
+                    renderBoard();
+                }, 1000);
+            }
+        }
+
+        function resetTurn() {
+            flippedCards = [];
+            isLocked = false;
+        }
+
+        function finishGame() {
+            window.parent.postMessage('JUEGO_SUPERADO', '*');
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
