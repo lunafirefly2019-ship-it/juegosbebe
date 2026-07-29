@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galaxy Shooter - ¡Ay, cuánto me quiero!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif; 
+            background-color: #0f172a; 
+            user-select: none;
+            touch-action: manipulation;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #111827, #1f2937);
+            border: 4px solid #db2777;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(219, 39, 119, 0.4);
+            display: block;
+            margin: 0 auto;
+        }
+        .control-btn {
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 16px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 0 #1d4ed8;
+            height: 60px;
+            user-select: none;
+        }
+        .control-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #1d4ed8;
+        }
+    </style>
+</head>
+<body class="text-white flex flex-col items-center justify-center min-h-screen p-2">
+
+    <div class="bg-gray-900 border-4 border-pink-500 rounded-3xl p-4 shadow-2xl w-full max-w-sm flex flex-col items-center relative overflow-hidden">
+        
+        <!-- Ventana Emergente del Cuento ("Recuerda...") -->
+        <div id="story-modal" class="hidden absolute inset-0 bg-gray-950/95 z-50 flex-col items-center justify-center p-6 text-center">
+            <div class="text-5xl mb-3 animate-bounce">✨📖</div>
+            <h2 class="text-2xl font-bold text-pink-400 mb-2">Recuerda...</h2>
+            <p id="story-text" class="text-base text-blue-200 italic mb-6 leading-relaxed bg-gray-800 p-4 rounded-2xl border-2 border-blue-400 shadow-inner"></p>
+            <button onclick="nextLevelOrFinish()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-6 py-3 rounded-full shadow-lg text-lg animate-pulse w-full">
+                Continuar Aventura ✨
+            </button>
+        </div>
+
+        <!-- Encabezado de Nivel -->
+        <div class="flex justify-between w-full mb-2 px-2 items-center">
+            <span id="level-indicator" class="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs border border-blue-300">Nivel 1 / 3</span>
+            <span id="score-display" class="text-pink-400 font-bold text-sm">Monstruos: 0</span>
+        </div>
+
+        <!-- Lienzo del Juego -->
+        <canvas id="gameCanvas" width="320" height="420" class="mb-4"></canvas>
+
+        <!-- Controles Táctiles -->
+        <div class="grid grid-cols-3 gap-3 w-full">
+            <button id="left-btn" class="control-btn">◀️</button>
+            <button id="shoot-btn" class="control-btn bg-pink-600 shadow-[0_4px_0_#9d174d]">🚀</button>
+            <button id="right-btn" class="control-btn">▶️</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const levelIndicator = document.getElementById("level-indicator");
+        const scoreDisplay = document.getElementById("score-display");
+        const storyModal = document.getElementById("story-modal");
+        const storyText = document.getElementById("story-text");
+
+        const storyFragments = [
+            "«Mis diez dedos de los pies son obras de arte universales y mi cabello desafía cualquier ley de la física con elegancia.»",
+            "«Si un monstruo nocturno se atreve a asomar la cabeza, quedará completamente cegado ante el brillo de mi absoluta perfección.»",
+            "«Abrir la ventana y descubrir a la niña de al lado me enseñó que compartir una sonrisa vale mucho más que adorarse en solitario.»"
+        ];
+
+        let currentLevel = 0;
+        let gameActive = true;
+
+        // Imágenes con el formato thumbnail de Google Drive
+        const playerImg = new Image();
+        playerImg.src = 'https://drive.google.com/thumbnail?id=1r7ylQdNE37GhQYPQd_APl7e05QDhjzcK&sz=w400';
+
+        // Los 3 monstruos distintos (uno para cada nivel)
+        const monsterImages = [new Image(), new Image(), new Image()];
+        monsterImages[0].src = 'https://drive.google.com/thumbnail?id=1GefFnJV3AGKHrcVFwEI0c-5cz-2HSfWW&sz=w400'; // Nivel 1
+        monsterImages[1].src = 'https://drive.google.com/thumbnail?id=1hyPjADeaZK61Uzujy4TTtj8DoJ1aE4Io&sz=w400'; // Nivel 2
+        monsterImages[2].src = 'https://drive.google.com/thumbnail?id=1vF8UlfmcJgg7wLr0T-VDk1L5doCANUyn&sz=w400'; // Nivel 3
+
+        let player = { x: 135, y: 360, width: 45, height: 45, speed: 5 };
+        let bullets = [];
+        let enemyBullets = [];
+        let monsters = [];
+        let walls = [];
+
+        // Variables de movimiento y ataque de monstruos
+        let monsterDirection = 1;
+        let monsterSpeed = 0.8;
+        let shootInterval = 0;
+
+        let keys = { ArrowLeft: false, ArrowRight: false, Space: false };
+
+        // Evitar que las flechas y la barra espaciadora muevan la pantalla del navegador
+        window.addEventListener("keydown", (e) => {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+                e.preventDefault();
+            }
+            if (e.key === "ArrowLeft" || e.key === "a") keys.ArrowLeft = true;
+            if (e.key === "ArrowRight" || e.key === "d") keys.ArrowRight = true;
+            if (e.key === " " || e.key === "ArrowUp") {
+                if (!keys.Space) shootBullet();
+                keys.Space = true;
+            }
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.key === "ArrowLeft" || e.key === "a") keys.ArrowLeft = false;
+            if (e.key === "ArrowRight" || e.key === "d") keys.ArrowRight = false;
+            if (e.key === " " || e.key === "ArrowUp") keys.Space = false;
+        });
+
+        const setupTouchButton = (id, keyName) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener("pointerdown", () => { keys[keyName] = true; });
+            btn.addEventListener("pointerup", () => { keys[keyName] = false; });
+            btn.addEventListener("pointerleave", () => { keys[keyName] = false; });
+        };
+
+        setupTouchButton("left-btn", "ArrowLeft");
+        setupTouchButton("right-btn", "ArrowRight");
+        document.getElementById("shoot-btn").addEventListener("pointerdown", () => { shootBullet(); });
+
+        function shootBullet() {
+            if (!gameActive) return;
+            bullets.push({ x: player.x + player.width / 2 - 3, y: player.y, width: 6, height: 12, speed: 7 });
+        }
+
+        function initLevel(level) {
+            currentLevel = level;
+            levelIndicator.textContent = `Nivel ${level + 1} / 3`;
+            bullets = [];
+            enemyBullets = [];
+            monsters = [];
+            walls = [];
+            player.x = 135;
+            monsterDirection = 1;
+            monsterSpeed = 0.6 + (level * 0.4); // Aumenta la velocidad por nivel
+
+            let rows = level === 0 ? 1 : 2;
+            let cols = 4;
+            let activeMonsterImg = monsterImages[level]; // Asigna exactamente un monstruo diferente por nivel
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    monsters.push({
+                        x: 35 + c * 65,
+                        y: 40 + r * 50,
+                        width: 36,
+                        height: 36,
+                        img: activeMonsterImg,
+                        alive: true
+                    });
+                }
+            }
+
+            // Paredes destructibles que protegen y sirven de escondite
+            let wallRowsConfig = level === 0 ? [130] : [120, 190];
+            wallRowsConfig.forEach(wy => {
+                for (let i = 0; i < 5; i++) {
+                    walls.push({ x: 20 + i * 58, y: wy, width: 45, height: 16, hp: level + 1 });
+                }
+            });
+
+            updateScoreDisplay();
+            gameActive = true;
+        }
+
+        function updateScoreDisplay() {
+            const aliveCount = monsters.filter(m => m.alive).length;
+            scoreDisplay.textContent = `Monstruos: ${aliveCount}`;
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            // Movimiento del jugador
+            if (keys.ArrowLeft && player.x > 10) player.x -= player.speed;
+            if (keys.ArrowRight && player.x < canvas.width - player.width - 10) player.x += player.speed;
+
+            // Movimiento dinámico de los monstruos (de lado a lado)
+            let hitEdge = false;
+            monsters.forEach(m => {
+                if (m.alive) {
+                    m.x += monsterSpeed * monsterDirection;
+                    if (m.x <= 10 || m.x >= canvas.width - m.width - 10) {
+                        hitEdge = true;
+                    }
+                }
+            });
+
+            if (hitEdge) {
+                monsterDirection *= -1;
+                monsters.forEach(m => {
+                    m.y += 6; // Bajan un poco al tocar los bordes
+                });
+            }
+
+            // Ataque aleatorio de los monstruos
+            shootInterval++;
+            let aliveMonsters = monsters.filter(m => m.alive);
+            if (shootInterval > (60 - currentLevel * 15) && aliveMonsters.length > 0) {
+                let shooter = aliveMonsters[Math.floor(Math.random() * aliveMonsters.length)];
+                enemyBullets.push({
+                    x: shooter.x + shooter.width / 2 - 3,
+                    y: shooter.y + shooter.height,
+                    width: 6,
+                    height: 12,
+                    speed: 3 + currentLevel
+                });
+                shootInterval = 0;
+            }
+
+            // Mover Balas del Jugador
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                if (bullets[i].y < 0) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                let bullet = bullets[i];
+                let bulletRemoved = false;
+
+                // Colisión con Paredes Destructibles
+                for (let w = walls.length - 1; w >= 0; w--) {
+                    let wall = walls[w];
+                    if (bullet.x < wall.x + wall.width && bullet.x + bullet.width > wall.x &&
+                        bullet.y < wall.y + wall.height && bullet.y + bullet.height > wall.y) {
+                        wall.hp--;
+                        if (wall.hp <= 0) walls.splice(w, 1);
+                        bullets.splice(i, 1);
+                        bulletRemoved = true;
+                        break;
+                    }
+                }
+
+                if (bulletRemoved) continue;
+
+                // Colisión con Monstruos
+                for (let m = 0; m < monsters.length; m++) {
+                    let monster = monsters[m];
+                    if (monster.alive &&
+                        bullet.x < monster.x + monster.width && bullet.x + bullet.width > monster.x &&
+                        bullet.y < monster.y + monster.height && bullet.y + bullet.height > monster.y) {
+                        monster.alive = false;
+                        bullets.splice(i, 1);
+                        updateScoreDisplay();
+                        checkWinCondition();
+                        break;
+                    }
+                }
+            }
+
+            // Mover Balas de los Monstruos (Ataque al jugador)
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                enemyBullets[i].y += enemyBullets[i].speed;
+                if (enemyBullets[i].y > canvas.height) {
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+
+                let eBullet = enemyBullets[i];
+                let eBulletRemoved = false;
+
+                // Colisión de bala enemiga con Paredes Destructibles
+                for (let w = walls.length - 1; w >= 0; w--) {
+                    let wall = walls[w];
+                    if (eBullet.x < wall.x + wall.width && eBullet.x + eBullet.width > wall.x &&
+                        eBullet.y < wall.y + wall.height && eBullet.y + eBullet.height > wall.y) {
+                        wall.hp--;
+                        if (wall.hp <= 0) walls.splice(w, 1);
+                        enemyBullets.splice(i, 1);
+                        eBulletRemoved = true;
+                        break;
+                    }
+                }
+
+                if (eBulletRemoved) continue;
+
+                // Colisión de bala enemiga con el Jugador (¡Si le da, reinicia el nivel!)
+                if (eBullet.x < player.x + player.width && eBullet.x + eBullet.width > player.x &&
+                    eBullet.y < player.y + player.height && eBullet.y + eBullet.height > player.y) {
+                    gameActive = false;
+                    // Reiniciar nivel actual al ser golpeado
+                    setTimeout(() => {
+                        initLevel(currentLevel);
+                    }, 300);
+                    break;
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            if (monsters.filter(m => m.alive).length === 0) {
+                gameActive = false;
+                storyText.textContent = storyFragments[currentLevel];
+                storyModal.classList.remove("hidden");
+                storyModal.classList.add("flex");
+            }
+        }
+
+        function nextLevelOrFinish() {
+            storyModal.classList.add("hidden");
+            storyModal.classList.remove("flex");
+
+            if (currentLevel < 2) {
+                initLevel(currentLevel + 1);
+            } else {
+                window.parent.postMessage('JUEGO_SUPERADO', '*');
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar Monstruos móviles
+            monsters.forEach(m => {
+                if (m.alive) {
+                    ctx.drawImage(m.img, m.x, m.y, m.width, m.height);
+                }
+            });
+
+            // Dibujar Paredes
+            walls.forEach(w => {
+                ctx.fillStyle = w.hp > 1 ? "#3b82f6" : "#60a5fa";
+                ctx.strokeStyle = "#db2777";
+                ctx.lineWidth = 2;
+                ctx.fillRect(w.x, w.y, w.width, w.height);
+                ctx.strokeRect(w.x, w.y, w.width, w.height);
+            });
+
+            // Dibujar Balas del Jugador
+            ctx.fillStyle = "#f472b6";
+            bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+
+            // Dibujar Balas de los Monstruos
+            ctx.fillStyle = "#ef4444"; // Rojo peligro
+            enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, eb.width, eb.height));
+
+            // Dibujar Jugador
+            ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Iniciar juego directamente
+        initLevel(0);
+        gameLoop();
+    </script>
+</body>
+</html>
