@@ -38,17 +38,16 @@
 
         <!-- Teclado en Pantalla -->
         <div id="keyboard" class="grid grid-cols-7 gap-1.5 w-full max-w-sm mb-4">
-            <!-- Botones de la A a la Z generados por JS -->
+            <!-- Botones generados por JS -->
         </div>
 
-        <!-- Botón Siguiente Nivel / Reiniciar (Oculto hasta ganar/perder) -->
+        <!-- Botón Siguiente Nivel / Reiniciar -->
         <button id="next-btn" onclick="nextLevel()" class="hidden bg-blue-500 hover:bg-blue-600 text-white font-bold px-6 py-2 rounded-full shadow-md transition transform hover:scale-105">
             Siguiente Nivel ➡️
         </button>
     </div>
 
     <script>
-        // Niveles con palabras clave del cuento (reemplazando a Copetín por HÉROE)
         const levels = [
             { word: "EGOCÉNTRICO", hint: "Así se describe el protagonista al inicio, muy enamorado de sí mismo." },
             { word: "HÉROE", hint: "Cómo se considera el protagonista en su propia vida y centro de atención." },
@@ -110,7 +109,8 @@
 
         function renderKeyboard() {
             keyboard.innerHTML = "";
-            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+            // Se añaden las vocales con tilde y la Ñ alfabéticamente/ordenadas para el juego
+            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚ";
             
             for (let char of letters) {
                 const btn = document.createElement('button');
@@ -157,12 +157,9 @@
                     nextBtn.textContent = "Siguiente Nivel ➡️";
                     nextBtn.classList.remove('hidden');
                 } else {
-                    // ¡JUEGO COMPLETADO EXITOSAMENTE!
                     messageContainer.textContent = "¡Completaste todos los niveles! 🌟";
                     nextBtn.textContent = "¡Terminar Reto! ✨";
                     nextBtn.classList.remove('hidden');
-                    
-                    // Notificar a la página principal que el minijuego fue superado
                     window.parent.postMessage("JUEGO_SUPERADO", "*");
                 }
             } else if (mistakes >= maxMistakes) {
@@ -189,16 +186,13 @@
                     currentLevel++;
                     loadLevel();
                 } else {
-                    // Acción final si ya dio clic en terminar
                     window.parent.postMessage("JUEGO_SUPERADO", "*");
                 }
             } else {
-                // Si perdió, reintenta el mismo nivel
                 loadLevel();
             }
         }
 
-        // Iniciar al cargar
         initGame();
     </script>
 </body>
