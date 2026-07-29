@@ -71,6 +71,11 @@
         const keyboard = document.getElementById('keyboard');
         const nextBtn = document.getElementById('next-btn');
 
+        // Función para quitar tildes a la hora de comparar
+        function removeAccents(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
         function initGame() {
             currentLevel = 0;
             loadLevel();
@@ -97,7 +102,10 @@
             for (let letter of selectedWord) {
                 const span = document.createElement('span');
                 span.className = "w-9 h-12 flex items-center justify-center text-2xl font-bold border-b-4 border-pink-500 text-gray-800 bg-pink-50 rounded-t-md";
-                span.textContent = guessedLetters.includes(letter) ? letter : "_";
+                
+                // Si la letra (sin tilde) ya fue adivinada, muestra la letra real (con su tilde si la tiene)
+                const normalizedLetter = removeAccents(letter);
+                span.textContent = guessedLetters.includes(normalizedLetter) ? letter : "_";
                 wordContainer.appendChild(span);
             }
         }
@@ -109,8 +117,7 @@
 
         function renderKeyboard() {
             keyboard.innerHTML = "";
-            // Se añaden las vocales con tilde y la Ñ alfabéticamente/ordenadas para el juego
-            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚ";
+            const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"; // Teclado limpio estándar
             
             for (let char of letters) {
                 const btn = document.createElement('button');
@@ -132,7 +139,9 @@
 
             guessedLetters.push(letter);
             
-            if (selectedWord.includes(letter)) {
+            // Comparamos sin tildes
+            const normalizedSelected = removeAccents(selectedWord);
+            if (normalizedSelected.includes(letter)) {
                 btn.className = "bg-blue-100 text-blue-800 font-bold p-2 rounded-lg text-sm border-2 border-blue-400";
             } else {
                 btn.className = "bg-red-100 text-red-800 font-bold p-2 rounded-lg text-sm border-2 border-red-400";
@@ -145,7 +154,8 @@
         }
 
         function checkGameStatus() {
-            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(letter));
+            // Gana si todas las letras de la palabra (sin tildes) están en guessedLetters
+            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(removeAccents(letter)));
 
             if (hasWon) {
                 isGameOver = true;
@@ -179,7 +189,7 @@
         }
 
         function nextLevel() {
-            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(letter));
+            const hasWon = [...selectedWord].every(letter => guessedLetters.includes(removeAccents(letter)));
             
             if (hasWon) {
                 if (currentLevel < levels.length - 1) {
